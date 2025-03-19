@@ -1,0 +1,66 @@
+% 4 rows (tracking strategies), 3 columns (atlases), 1 network measure (path_length or transitivity)
+figure;
+t=tiledlayout('flow');
+for algoname = {"Prob","Determ","SIFT2","ThreshProb"}
+    
+    for atlasname ={'freesurfer','slant','hcpmmp1'}
+        tbl = readtable("Global_"+algoname+"_"+atlasname+".csv");
+        disp("Global_"+algoname+"_"+atlasname+".csv")
+        %disp(atlasname)
+        mu_AD = zeros(1,6);
+        sigma_AD = zeros(1,6);
+        mu_CN = zeros(1,6);
+        sigma_CN = zeros(1,6);
+        i=0;
+        %disp(algoname)
+        clear ad cn
+        nexttile; hold on;
+        for numstreams = [10000, 1000000, 2000000, 4000000, 5000000, 10000000]
+            disp(numstreams)
+            i=i+1.25;
+            %disp(numstreams)   
+            researchgroup='AD';
+            subsetT = tbl((tbl.NumStream == numstreams) & strcmp(tbl.DX,researchgroup) & tbl.Iteration==1, :);
+            % make 5x20 matrix (5 repeats, 20 patients)
+            %dx(:,i) = subsetT.Modularity;
+            boxchart((i-0.25)*ones(length(subsetT.Modularity),1),subsetT.Modularity,'BoxFaceColor','r');
+            a = subsetT.Modularity;
+            disp(i);
+
+
+            %ad(:,i) = subsetT.Modularity; 
+            %mu_AD(i) = mean(subsetT.Modularity,"omitmissing");   % mean across subjs, iteration 1, group = 1/AD
+            %sigma_AD(i) = std(subsetT.Modularity,"omitmissing"); % std across subjs, iteration 1, group = 1/AD
+            
+            researchgroup='CN';
+            subsetT = tbl((tbl.NumStream == numstreams) & strcmp(tbl.DX,researchgroup) & tbl.Iteration==1, :);
+            boxchart((i+0.25)*ones(length(subsetT.Modularity),1),subsetT.Modularity, 'BoxFaceColor' ,'b');            %dx(:,i+1) = subsetT.Modularity;
+            b = subsetT.Modularity;
+            [h,p] = ttest2(a,b)
+            disp(p);
+            %cn(:,i)=subsetT.Modularity;
+            %mu_CN(i) = mean(subsetT.Modularity,"omitmissing");   % mean across subjs, iteration 1, group = 0/CN
+            %sigma_CN(i) = std(subsetT.Modularity,"omitmissing"); % std across subjs, iteration 1, group = 0/CN
+        end
+        
+        %nexttile;
+        %x = [1 2 3 4 5 6];
+        %ci1 = mu_AD-sigma_AD; ci2 = mu_AD+sigma_AD;
+        %boxplot(x, ad); hold on; boxplot(x+0.25,cn);
+        %ci2 = ci2(~isnan(ci1));
+        %x = x(~isnan(ci1));
+        %mu_AD = mu_AD(~isnan(ci1));
+        %ci1 = ci1(~isnan(ci1));
+        %plot(x,mu_AD,'r');
+        hold on; title("Modularity"+atlasname+algoname); ylim([0.5 0.8]); xlim([1 8]);   
+        ylabel('Modularity');
+        x = [1 2 3 4 5 6];
+        xlabel('Streamline count');  xticks(x*1.25);xticklabels({10000, 1000000, 2000000, 4000000, 5000000, 10000000})
+        %fill([x, fliplr(x)], [ci1, fliplr(ci2)], 'r', EdgeColor='none', FaceAlpha=0.2);
+        x = [1 2 3 4 5 6];
+
+        %plot(x,mu_CN,'b');
+        %ci1 = mu_CN-sigma_CN; ci2 = mu_CN+sigma_CN;
+        %fill([x, fliplr(x)], [ci1, fliplr(ci2)], 'b', EdgeColor='none', FaceAlpha=0.2);
+    end
+end
