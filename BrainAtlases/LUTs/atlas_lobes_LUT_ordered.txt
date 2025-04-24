@@ -1,0 +1,20 @@
+# Below is the color table for a lobar parcellation obtained from running:
+# mri_annotation2label --subject subject --hemi lh --lobesStrict lobes
+# mri_annotation2label --subject subject --hemi rh --lobesStrict lobes
+# mri_aparc2aseg --s subject --rip-unknown --volmask \
+#   --o aparc.lobes.mgz --annot lobes \
+#   --base-offset 300 [--base-offset must be last arg]
+
+1    ctx-lh-frontal-lobe                  25  100 40  0
+2    ctx-lh-cingulate-lobe                100 25  0   0
+3    ctx-lh-occipital-lobe                120 70  50  0
+4    ctx-lh-temporal-lobe                 220 20  100 0
+5    ctx-lh-parietal-lobe                 220 20  10  0
+6    ctx-lh-insula-lobe                   255 192 32  0
+
+7    ctx-rh-frontal-lobe                  25  100 40  0
+8    ctx-rh-cingulate-lobe                100 25  0   0
+9    ctx-rh-occipital-lobe                120 70  50  0
+10    ctx-rh-temporal-lobe                 220 20  100 0
+11    ctx-rh-parietal-lobe                 220 20  10  0
+12    ctx-rh-insula-lobe                   255 192 32  0
