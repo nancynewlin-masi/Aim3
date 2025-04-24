@@ -1,0 +1,82 @@
+
+# Take in atlas
+# Take in diffusion directory (dwi, bvec, bval)
+# singularity run --bind ${workingpath_accre}/PreQual/:/DIFFUSION/,${workingpath_accre}/Slant/:/SLANT/,${workingpath_accre}/Output/:/OUTPUTS/ ${singularity_path}
+# bash tractrography.sh /home-local/WIEE/Inputs/sub-4802_ses-adni2year1_dx-AD/ /home-local/WIEE/Outputs/sub-4802_ses-adni2year1_dx-AD/ /nfs2/harmonization/BIDS/ADNI_DTI/derivatives/sub-4802/ses-adni2year1/PreQual/PREPROCESSED/../ 1000 1
+
+export INPUTDIR=${1}
+export OUTPUTDIR=${2}
+export PREQUALDIR=${3}
+export NUMSTREAMS=${4}
+export ITERATION=${5}
+#export WORKINGDIR=/home-local/newlinnr/WIEE/ #/home-local/WIEE/
+export WORKINGDIR=/home-local/Aim3/
+
+CHECKFILE=${OUTPUTDIR}/graphmeasures_nodes_NumStreamlines_${NUMSTREAMS}_Atlas_hcpmmp1_Iteration_${ITERATION}_SIFT2.json
+if test -f "${OUTPUTDIR}/graphmeasures_nodes_NumStreamlines_${NUMSTREAMS}_Atlas_hcpmmp1_Iteration_${ITERATION}_SIFT2.json"; then
+    echo "File found - skipping this iteration."
+    exit;
+fi
+
+echo "Start tracking using probabilistic ACT... Warning: this step will be storage and time intensive." >> ${OUTPUTDIR}/log.txt
+# Generate 10 million streamlines
+# Takes time, and will be several GB of space
+tckgen -act ${INPUTDIR}/5ttmask_inDWIspace.nii.gz -backtrack -seed_gmwmi ${INPUTDIR}/gmwmSeed_inDWIspace.nii.gz -select ${NUMSTREAMS} ${INPUTDIR}/wmfod.nii.gz ${OUTPUTDIR}/tractogram_${NUMSTREAMS}_iteration_${ITERATION}.tck
+tcksift2 ${OUTPUTDIR}/tractogram_${NUMSTREAMS}_iteration_${ITERATION}.tck ${INPUTDIR}/wmfod.nii.gz ${OUTPUTDIR}/SIFT2_${NUMSTREAMS}_iteration_${ITERATION}.txt -act ${INPUTDIR}/5ttmask_inDWIspace.nii.gz -out_mu ${OUTPUTDIR}/MU_${NUMSTREAMS}_iteration_${ITERATION}.txt
+if test -f "${OUTPUTDIR}/tractogram_${NUMSTREAMS}_iteration_${ITERATION}.tck"; then
+    echo "Successfully tracked 10 million streamlines." >> ${OUTPUTDIR}/log.txt
+    echo "Save tck file as TCK_FILE=${TEMPDIR}/tractogram_${NUMSTREAMS}.tck..."  >> ${OUTPUTDIR}/log.txt
+    export TCK_FILE=${OUTPUTDIR}/tractogram_${NUMSTREAMS}_iteration_${ITERATION}.tck
+else
+    echo "FAILED: Did create tractogram. Check storage space available." >> ${OUTPUTDIR}/log.txt
+    exit 0;
+fi
+
+ATLASNAMES="slant freesurfer hcpmmp1"
+for CURRATLAS in $ATLASNAMES
+do
+    echo "Mapping to connectomes using $CURRATLAS labels..."
+    export ATLAS=${INPUTDIR}/atlas_inDWIspace_${CURRATLAS}.nii.gz
+    echo "Map tracks to Connectomes -NOS, Mean Length, FA-, guided by atlas..." >> ${OUTPUTDIR}/log.txt
+    # Map tracks to connectome (weighted by NOS)
+    
+    tck2connectome ${TCK_FILE} ${ATLAS} ${OUTPUTDIR}/CONNECTOME_Weight_SIFT2NUMSTREAMS_NumStreamlines_${NUMSTREAMS}_Atlas_${CURRATLAS}_Iteration_${ITERATION}.csv -tck_weights_in ${OUTPUTDIR}/SIFT2_${NUMSTREAMS}_iteration_${ITERATION}.txt -symmetric 
+    python ${WORKINGDIR}/Code/convertconnectometonp.py  ${OUTPUTDIR}/CONNECTOME_Weight_SIFT2NUMSTREAMS_NumStreamlines_${NUMSTREAMS}_Atlas_${CURRATLAS}_Iteration_${ITERATION}.csv ${OUTPUTDIR}/CONNECTOME_SIFT2NUMSTREAMS_NumStreamlines_${NUMSTREAMS}_Atlas_${CURRATLAS}_Iteration_${ITERATION}.npy
+    singularity exec --bind ${OUTPUTDIR} ${WORKINGDIR}/scilus_1.5.0.sif scil_evaluate_connectivity_graph_measures.py ${OUTPUTDIR}/CONNECTOME_SIFT2NUMSTREAMS_NumStreamlines_${NUMSTREAMS}_Atlas_${CURRATLAS}_Iteration_${ITERATION}.npy ${OUTPUTDIR}/CONNECTOME_SIFT2NUMSTREAMS_NumStreamlines_${NUMSTREAMS}_Atlas_${CURRATLAS}_Iteration_${ITERATION}.npy   ${OUTPUTDIR}/graphmeasures_nodes_NumStreamlines_${NUMSTREAMS}_Atlas_${CURRATLAS}_Iteration_${ITERATION}_SIFT2.json
+    singularity exec --bind ${OUTPUTDIR} ${WORKINGDIR}/scilus_1.5.0.sif scil_evaluate_connectivity_graph_measures.py ${OUTPUTDIR}/CONNECTOME_SIFT2NUMSTREAMS_NumStreamlines_${NUMSTREAMS}_Atlas_${CURRATLAS}_Iteration_${ITERATION}.npy ${OUTPUTDIR}/CONNECTOME_SIFT2NUMSTREAMS_NumStreamlines_${NUMSTREAMS}_Atlas_${CURRATLAS}_Iteration_${ITERATION}.npy   ${OUTPUTDIR}/graphmeasures_nodes_NumStreamlines_${NUMSTREAMS}_Atlas_${CURRATLAS}_Iteration_${ITERATION}_SIFT2.json --avg_node_wise
+
+    # Get graph measure
+    #python /APPS/scilpy/getgraphmeasures.py  ${OUTPUTDIR}/CONNECTOME_NUMSTREAM_NumStreamlines_${NUMSTREAMS}_Atlas_${CURRATLAS}_Iteration_${ITERATION}.npy ${OUTPUTDIR}/CONNECTOME_LENGTH_NumStreamlines_${NUMSTREAMS}_Atlas_${CURRATLAS}_Iteration_${ITERATION}.npy  ${OUTPUTDIR}/graphmeasures_NumStreamlines_${NUMSTREAMS}_Atlas_${CURRATLAS}_Iteration_${ITERATION}.json --avg_node_wise
+    #python /APPS/scilpy/getgraphmeasures.py  ${OUTPUTDIR}/CONNECTOME_NUMSTREAM_NumStreamlines_${NUMSTREAMS}_Atlas_${CURRATLAS}_Iteration_${ITERATION}.npy ${OUTPUTDIR}/CONNECTOME_LENGTH_NumStreamlines_${NUMSTREAMS}_Atlas_${CURRATLAS}_Iteration_${ITERATION}.npy  ${OUTPUTDIR}/graphmeasures_nodes_NumStreamlines_${NUMSTREAMS}_Atlas_${CURRATLAS}_Iteration_${ITERATION}.json
+    echo "Get graph measures..."
+    #singularity exec --bind ${OUTPUTDIR} ${WORKINGDIR}/scilus_1.5.0.sif scil_evaluate_connectivity_graph_measures.py  ${OUTPUTDIR}/CONNECTOME_NUMSTREAM_NumStreamlines_${NUMSTREAMS}_Atlas_${CURRATLAS}_Iteration_${ITERATION}.npy ${OUTPUTDIR}/CONNECTOME_LENGTH_NumStreamlines_${NUMSTREAMS}_Atlas_${CURRATLAS}_Iteration_${ITERATION}.npy  ${OUTPUTDIR}/graphmeasures_nodes_NumStreamlines_${NUMSTREAMS}_Atlas_${CURRATLAS}_Iteration_${ITERATION}.json
+    #singularity exec --bind ${OUTPUTDIR} ${WORKINGDIR}/scilus_1.5.0.sif scil_evaluate_connectivity_graph_measures.py  ${OUTPUTDIR}/CONNECTOME_NUMSTREAM_NumStreamlines_${NUMSTREAMS}_Atlas_${CURRATLAS}_Iteration_${ITERATION}.npy ${OUTPUTDIR}/CONNECTOME_LENGTH_NumStreamlines_${NUMSTREAMS}_Atlas_${CURRATLAS}_Iteration_${ITERATION}.npy  ${OUTPUTDIR}/graphmeasures_NumStreamlines_${NUMSTREAMS}_Atlas_${CURRATLAS}_Iteration_${ITERATION}.json --avg_node_wise
+    echo "Done computing graph measures..."	
+    if test -f "${OUTPUTDIR}/graphmeasures_NumStreamlines_${NUMSTREAMS}_Atlas_${CURRATLAS}_Iteration_${ITERATION}_SIFT2.json"; then
+        echo "Successfully computed global graph measures. Saving to /OUTPUTS/." >> ${OUTPUTDIR}/log.txt
+        #cp ${OUTPUTDIR}/graphmeasures.json ${OUTPUTDIR}
+    else
+        echo "FAILED: Did not compute global graph measures." >> ${OUTPUTDIR}/log.txt
+        #exit 0;
+    fi
+
+    if test -f "${OUTPUTDIR}/graphmeasures_nodes_NumStreamlines_${NUMSTREAMS}_Atlas_${CURRATLAS}_Iteration_${ITERATION}_SIFT2.json"; then
+        echo "Successfully computed nodal graph measures. Saving to /OUTPUTS/." >> ${OUTPUTDIR}/log.txt
+        #cp ${INPUTDIR}/graphmeasures_nodes.json ${OUTPUTDIR}
+    else
+        echo "FAILED: Did not compute nodal graph measures." >> ${OUTPUTDIR}/log.txt
+        #exit 0;
+    fi
+
+
+    echo "Completed Connectome special." >> ${OUTPUTDIR}/log.txt
+    date >> ${OUTPUTDIR}/log.txt
+
+    echo "Creating QA document..." >> ${OUTPUTDIR}/log.txt
+    #singularity exec --bind /home-local/WIEE/ /home-local/WIEE/NancysDiffusionSingularity.sif python /home-local/WIEE//Code/qa.py ${INPUTDIR}/wmfod.nii.gz ${ATLAS} ${OUTPUTDIR}/CONNECTOME_LENGTH_NumStreamlines_${NUMSTREAMS}_Atlas_${CURRATLAS}_Iteration_${ITERATION}.npy  ${OUTPUTDIR}/CONNECTOME_LENGTH_NumStreamlines_${NUMSTREAMS}_Atlas_${CURRATLAS}_Iteration_${ITERATION}.npy ${OUTPUTDIR}/CONNECTOME_FA_NumStreamlines_${NUMSTREAMS}_Atlas_${CURRATLAS}_Iteration_${ITERATION}.npy ${OUTPUTDIR}/graphmeasures_NumStreamlines_${NUMSTREAMS}_Atlas_${CURRATLAS}_Iteration_${ITERATION}.json ${OUTPUTDIR}/log.txt ${OUTPUTDIR}/ConnectomeQA_NumStreamlines_${NUMSTREAMS}_Atlas_${CURRATLAS}_Iteration_${ITERATION}.png >> ${OUTPUTDIR}/log.txt
+        
+done
+#rm -r ${INPUTDIR}
+rm ${OUTPUTDIR}/tractogram_${NUMSTREAMS}_iteration_${ITERATION}.tck
+rm ${OUTPUTDIR}/CONNECTOME*.csv
+rm ${OUTPUTDIR}/mean_FA_per_streamline_*
